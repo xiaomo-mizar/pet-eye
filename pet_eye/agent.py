@@ -13,13 +13,15 @@ from typing import Any
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
 
+from .activity import Activity, collect as collect_activity
 from .capture import ScreenCapture, Shot, hamming
 from .config import Config
 from .context import get_scene
 from .diversity import STRATEGY_BY_ID, TurnPlan, plan_turn, screen_digest, stats_summary
 from .llm import LLMError, VisionLLM
 from .meme import MemeLibrary, fallback_caption
-from .paths import STATE_PATH, ensure_runtime_dir
+from .memory import MemoryStore, forget_due_seconds
+from .paths import MEMORY_PATH, STATE_PATH, ensure_runtime_dir
 from .window import (
     foreground_window,
     get_pet_rect,
@@ -75,6 +77,9 @@ class CycleResult:
     meme_line: str = ""
     meme_key: str = ""
     meme_tag: str = ""
+    remember: list[tuple[str, str]] = field(default_factory=list)
+    activity_digest: str = ""
+    scene_text: str = ""
 
 
 class WorkerSignals(QObject):
@@ -89,6 +94,7 @@ class CycleWorker(QRunnable):
         llm: VisionLLM,
         session: Session,
         memes: MemeLibrary,
+        memory: MemoryStore,
     ):
         super().__init__()
         self.cfg = cfg
@@ -96,6 +102,7 @@ class CycleWorker(QRunnable):
         self.llm = llm
         self.session = session
         self.memes = memes
+        self.memory = memory
         self.signals = WorkerSignals()
 
     def run(self) -> None:
@@ -126,6 +133,30 @@ class CycleWorker(QRunnable):
             result.media_key = (
                 f"{getattr(media, 'title', '')}|{getattr(media, 'artist', '')}" if media else ""
             )
+
+            # 用户动向：注册表 + PowerShell（PowerShell 部分有缓存，不会每轮都跑）
+            activity = Activity()
+            if self.cfg.activity.enabled:
+                try:
+                    activity = collect_activity(
+                        self.cfg.activity, self.cfg.privacy.skip_window_keywords
+                    )
+                except Exception as e:
+                    log.debug("动向采集失败：%s", e)
+            result.activity_digest = activity.digest()
+
+            # 记忆：长期（向量召回）+ 短期（最近 3 轮）
+            memory_block = ""
+            window_block = ""
+            if self.cfg.memory.enabled:
+                try:
+                    query = " ".join(
+                        part for part in (scene.short(), title, activity.digest()) if part
+                    )
+                    memory_block = self.memory.memory_block(query)
+                    window_block = self.memory.window_block()
+                except Exception as e:
+                    log.debug("记忆召回失败：%s", e)
 
             now = time.time()
             if self.session.last_hash:
@@ -245,6 +276,9 @@ class CycleWorker(QRunnable):
                 idle_min=result.idle_min,
                 recent_lines=self.session.recent_lines,
                 scene_block=scene.to_prompt_block(),
+                activity_block=activity.to_prompt_block(),
+                memory_block=memory_block,
+                window_block=window_block,
             )
             result.ok = True
             result.line = speech.line
@@ -253,6 +287,8 @@ class CycleWorker(QRunnable):
             result.strategy = speech.strategy
             result.candidates = speech.candidates
             result.novelty = speech.novelty
+            result.remember = list(speech.remember)
+            result.scene_text = scene.short()
         except LLMError as e:
             result.error = str(e)
         except Exception as e:  # 截图/窗口/编码失败都不应该让进程崩
@@ -272,6 +308,7 @@ class PetEyeAgent(QObject):
         self.capture = ScreenCapture(cfg.capture)
         self.llm = VisionLLM(cfg.llm, api_key)
         self.memes = MemeLibrary(cfg.meme.packs)
+        self.memory = MemoryStore(cfg.memory, MEMORY_PATH).load()
         self.pool = QThreadPool(self)
         self.pool.setMaxThreadCount(1)
         self.timer = QTimer(self)
@@ -320,6 +357,15 @@ class PetEyeAgent(QObject):
         else:
             interval = f"{min_sec:.0f}~{max_sec:.0f} 秒"
         log.info("识屏智能体启动：每 %s一次，模型 %s", interval, self.cfg.llm.model)
+        if self.cfg.memory.enabled:
+            stats = self.memory.stats()
+            log.info(
+                "记忆：%d 个标签 / %d 条 chunk，下次遗忘约 %.1f 小时后",
+                stats["tags"],
+                stats["chunks"],
+                forget_due_seconds(self.memory) / 3600.0,
+            )
+            self._maybe_forget()
         self._schedule(self.cfg.agent.first_delay_sec, message="第一次看屏幕")
 
     def stop(self) -> None:
@@ -446,6 +492,7 @@ class PetEyeAgent(QObject):
             "min_interval_min": self.cfg.agent.min_interval_min,
             "max_interval_min": self.cfg.agent.max_interval_min,
             "next_in_sec": max(0.0, self._next_at - time.time()) if self._next_at else None,
+            "memory": self.memory.stats() if self.cfg.memory.enabled else {},
         }
 
     # ---------- 状态 ----------
@@ -521,6 +568,41 @@ class PetEyeAgent(QObject):
 
     def _emit_status(self) -> None:
         self.status_changed.emit(self.status())
+
+    # ---------- 记忆 ----------
+
+    def _remember_turn(self, scene: str, line: str, activity_digest: str, notes) -> None:
+        """一轮结束后：写滑动窗口 + 收下模型主动记的事 + 存盘。"""
+        if not self.cfg.memory.enabled:
+            return
+        try:
+            self.memory.add_turn(scene, line, activity_digest)
+            if notes:
+                landed = self.memory.remember_many(notes)
+                if landed:
+                    log.info("记住：%s", "、".join(landed))
+            self.memory.save()
+        except Exception as e:
+            log.warning("写记忆失败：%s", e)
+
+    def _maybe_forget(self) -> None:
+        """每 24 小时清一次过时的标签和 chunk。"""
+        if not self.cfg.memory.enabled:
+            return
+        if not self.memory.need_forget():
+            return
+        try:
+            stats = self.memory.forget()
+            self.memory.save(force=True)
+            log.info(
+                "遗忘完成：删 %d 个 chunk、%d 个标签，合并 %d 个标签，剩 %d 个标签",
+                stats["dropped_chunks"],
+                stats["dropped_tags"],
+                stats["merged_tags"],
+                stats["tags_left"],
+            )
+        except Exception as e:
+            log.warning("遗忘失败：%s", e)
 
     # ---------- 调度 ----------
 
@@ -600,7 +682,9 @@ class PetEyeAgent(QObject):
             since_meme=self._since_meme,
             recent_meme_keys=list(self._recent_meme_keys),
         )
-        worker = CycleWorker(self.cfg, self.capture, self.llm, session, self.memes)
+        worker = CycleWorker(
+            self.cfg, self.capture, self.llm, session, self.memes, self.memory
+        )
         worker.signals.done.connect(self._on_worker_done)
         self._worker = worker
         self.pool.start(worker)
@@ -685,6 +769,8 @@ class PetEyeAgent(QObject):
                 result.usage.get("total_tokens", "?"),
             )
             self.image_ready.emit(result.meme_path, line)
+            self._remember_turn(result.scene_text or result.title, line, result.activity_digest, [])
+            self._maybe_forget()
             self._emit_status()
             self._schedule_next()
             self._save_state()
@@ -774,6 +860,10 @@ class PetEyeAgent(QObject):
             result.attempts,
             result.usage.get("total_tokens", "?"),
         )
+        self._remember_turn(
+            result.scene_text or result.title, result.line, result.activity_digest, result.remember
+        )
+        self._maybe_forget()
         self.line_ready.emit(result.line)
         self._emit_status()
         self._schedule_next()

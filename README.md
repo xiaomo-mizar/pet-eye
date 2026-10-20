@@ -134,6 +134,19 @@ packs = []                   # 留空 = 用 ~/.dsh/meme-packs 下全部图库
 
 [control]
 port = 8765                  # 桌宠右键菜单通过 127.0.0.1:8765 控制
+
+[activity]
+enabled = true               # 读注册表 + PowerShell 了解你在忙什么
+ps_interval_min = 5          # 进程快照缓存 5 分钟，别每轮都开 PowerShell
+max_items = 6
+
+[memory]
+enabled = true
+window_size = 3              # 滑动窗口 3 轮
+forget_interval_hours = 24   # 每 24 小时遗忘一次
+decay_per_day = 0.6          # 没被用到的记忆每天权重打六折
+min_weight = 0.15            # 低于这个就删
+merge_similarity = 0.86      # 标签相似度超过这个就合并
 ```
 
 ---
@@ -146,12 +159,18 @@ port = 8765                  # 桌宠右键菜单通过 127.0.0.1:8765 控制
    ├─ 1. 找桌宠窗口 → 按 HIT_BOX 换算"看得见的身体"位置
    ├─ 2. mss 截主屏 → OpenCV 缩放 / 糊掉桌宠 / JPEG / 8×8 均值哈希
    ├─ 3. 识别状态：在听什么歌、在玩什么、在做什么
-   ├─ 4. 截图 + 窗口标题 + 时间 + 状态 + 最近说过的话 → DeepSeek
+   ├─ 3.5 读动向（注册表 + PowerShell）→ 召回长期记忆 → 装上最近 3 轮
+   ├─ 4. 截图 + 窗口标题 + 时间 + 状态 + 动向 + 记忆 + 最近说的话 → DeepSeek
    ├─ 5. JSON → 清洗 → Pydantic 卡 20~50 字 → 不合格重试
-   └─ 6. Qt 气泡：判断桌宠在哪一侧 → 贴左上/右上 → 按像素断行 → 淡入
+   ├─ 6. Qt 气泡：判断桌宠在哪一侧 → 贴左上/右上 → 按像素断行 → 淡入
+   └─ 7. 写回记忆：滑动窗口推进一轮 + 收下模型主动记的事（每天遗忘一次）
 ```
 
 **识别你在干什么**（`pet_eye/context.py`）：Windows 媒体会话（SMTC）拿歌名和播放状态；再用 `pycaw` 确认那个播放器进程**真的在出声**，避免把暂停的歌、上次没关的歌当成正在听；前台窗口的进程名和标题用来判断写代码 / 终端 / 文档 / 聊天 / 全屏游戏。
+
+**读取你的动向**（`pet_eye/activity.py`）：注册表里翻 Win+R 运行历史、资源管理器地址栏敲过的路径、搜索框的最近应用、`%APPDATA%\...\Recent` 里最近打开的文件；再加一份进程/窗口快照（PowerShell 取进程名，进程内 EnumWindows 取标题，5 分钟缓存一次）。这些只读元数据拼成「主人最近的动向」塞进 user 消息，密码库/银行这类关键词会被过滤掉。
+
+**记住你的事**（`pet_eye/memory.py`）：短期是 **3 轮滑动窗口**（场景 + 说了什么），长期是 **标签 → chunk** 两级结构：标签（如「写代码」）下面挂一句句事实（chunk）。标签是向量化的，新标签和旧标签余弦相似度够高就直接**合并**（自带一个 256 维字符 n-gram 向量库，不依赖外部服务）。每 **24 小时**跑一次**遗忘**：按天衰减权重，低于阈值的 chunk / 标签直接删掉——所以不需要「先扫全库再去重」的双层架构，库本身就是小的。模型要不要记、记什么，由 `schemas.py` 里的 Pydantic 模型约束（`remember: [{tag, text}]`，最多 2 条）。
 
 **让它别复读**（`pet_eye/diversity.py`）：13 种策略轮盘（观察、陪伴、吐槽、提问、冷知识、夸夸、小故事、傲娇、吃醋、猜心思、哼歌词、提醒休息、追问上一句），一次生成 3 条候选，按「新颖度 + 屏幕锚点 + 长度档 + 句式 + 禁用词」打分选一条；最近 12 句进记忆，高频开头和词会被动态禁用。听歌时可以哼一两句歌词。
 
@@ -284,7 +303,7 @@ Test-Path "$env:USERPROFILE\.dsh\.credentials.yaml"
 
 ```bat
 .venv\Scripts\pip install -r requirements.txt
-.venv\Scripts\python -m pytest -q     # 40 个测试：几何、提示词解析、状态识别、气泡、多样性、表情包
+.venv\Scripts\python -m pytest -q     # 66 个测试：几何、提示词解析、状态识别、气泡、多样性、表情包、动向、记忆、模型输出
 ```
 
 目录：
@@ -295,6 +314,9 @@ pet_eye/
   agent.py       调度 + 后台线程 + 周期状态
   capture.py     mss 截图 + OpenCV 处理
   context.py     音乐 / 游戏 / 前台窗口 / 全屏
+  activity.py    注册表 + PowerShell 读用户动向
+  memory.py      3 轮滑动窗口 + 标签/chunk 长期记忆 + 遗忘
+  schemas.py     模型输出的 Pydantic 约束（候选 + remember）
   diversity.py   策略、候选打分、去重
   meme.py        表情包图库与选择
   llm.py         OpenAI 兼容视觉接口 + 候选解析
@@ -303,7 +325,7 @@ pet_eye/
   window.py      Win32 窗口 / DPI / 空闲 / 媒体会话
   control.py     127.0.0.1:8765 控制接口
 scripts/         check_vision.py、diagnose_window.py 等排查脚本
-tests/           40 个单测
+tests/           66 个单测
 ```
 
 ---

@@ -29,6 +29,7 @@ from .meme import (
     fallback_caption,
 )
 from .prompt import build_system_prompt, build_user_text
+from .schemas import extract_remember
 
 MIN_CHARS = 20
 MAX_CHARS = 50
@@ -59,6 +60,7 @@ class SpeechResult:
     strategy: str = ""
     candidates: list[dict[str, Any]] = field(default_factory=list)
     novelty: float = 0.0
+    remember: list[tuple[str, str]] = field(default_factory=list)
 
 
 def _strip_wrapping(text: str) -> str:
@@ -285,6 +287,9 @@ class VisionLLM:
         idle_min: float,
         recent_lines: list[str] | None = None,
         scene_block: str = "",
+        activity_block: str = "",
+        memory_block: str = "",
+        window_block: str = "",
     ) -> SpeechResult:
         base_user = build_user_text(
             window_title=window_title,
@@ -292,6 +297,9 @@ class VisionLLM:
             scene_block=scene_block,
             recent_lines=recent_lines,
             plan=plan,
+            activity_block=activity_block,
+            memory_block=memory_block,
+            window_block=window_block,
         )
         user_text = base_user
         last_error = ""
@@ -332,6 +340,7 @@ class VisionLLM:
                             strategy=best["strategy"],
                             candidates=[row for _, row in scored],
                             novelty=round(1.0 - sim, 3),
+                            remember=extract_remember(raw),
                         )
             else:
                 last_error = f"没有 {count} 个 20~50 字的合格候选"

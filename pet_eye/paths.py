@@ -27,6 +27,7 @@ CONFIG_PATH = PROJECT_ROOT / "config.toml"
 RUNTIME_DIR = PROJECT_ROOT / "runtime"
 LOG_PATH = RUNTIME_DIR / "pet-eye.log"
 STATE_PATH = RUNTIME_DIR / "state.json"
+MEMORY_PATH = RUNTIME_DIR / "memory.json"
 
 DSH_HOME = Path(os.environ.get("DSH_HOME", str(Path.home() / ".dsh"))).expanduser()
 PET_PLUGIN_DIR = DSH_HOME / "profiles" / "desktop" / "node_modules" / "dsh-pet"

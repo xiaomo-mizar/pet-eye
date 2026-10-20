@@ -129,6 +129,50 @@ class ControlConfig(BaseModel):
     port: int = Field(default=8765, ge=1024, le=65535)
 
 
+class ActivityConfig(BaseModel):
+    """用户动向：注册表 + PowerShell 看主人在忙什么（只读，不碰文件内容）。"""
+
+    enabled: bool = True
+    # 注册表：Win+R 历史、地址栏路径、最近应用、Recent 目录
+    registry: bool = True
+    # PowerShell：进程/窗口快照（比较慢，单独缓存，不每轮都跑）
+    powershell: bool = True
+    ps_interval_min: float = Field(default=5.0, ge=0.5, le=120.0)
+    ps_timeout_sec: float = Field(default=12.0, ge=3.0, le=60.0)
+    # 每类最多取几条
+    max_items: int = Field(default=6, ge=1, le=20)
+    # 多久以内算“最近”
+    recent_minutes: int = Field(default=240, ge=10, le=1440)
+    # 这些路径/标题不采集（密码库、隐私目录）
+    skip_keywords: list[str] = Field(
+        default_factory=lambda: ["Password", "密码", "银行", "pay", "token", ".ssh", "key"]
+    )
+
+
+class MemoryConfig(BaseModel):
+    """记忆：3 轮滑动窗口 + 标签/chunk 长期记忆 + 遗忘。"""
+
+    enabled: bool = True
+    # 短期：滑动窗口保留几轮（用户要求 3 轮）
+    window_size: int = Field(default=3, ge=1, le=10)
+    # 长期：标签数量上限、每个标签下的 chunk 上限
+    max_tags: int = Field(default=40, ge=5, le=200)
+    max_chunks_per_tag: int = Field(default=8, ge=1, le=30)
+    # 每 24 小时遗忘一次：权重按天衰减，低于阈值的 chunk/标签直接删掉
+    forget_interval_hours: float = Field(default=24.0, ge=1.0, le=240.0)
+    decay_per_day: float = Field(default=0.6, ge=0.1, le=0.99)
+    min_weight: float = Field(default=0.15, ge=0.01, le=1.0)
+    # 遗忘后仍然多久没被用到的标签直接删
+    forget_after_days: float = Field(default=7.0, ge=1.0, le=90.0)
+    # 同类标签用向量相似度合并
+    merge_similarity: float = Field(default=0.86, ge=0.5, le=0.99)
+    # 每轮召回几条记忆塞进提示词
+    recall_k: int = Field(default=3, ge=0, le=10)
+    # 模型每一轮最多能写几条新记忆
+    remember_per_turn: int = Field(default=2, ge=0, le=5)
+    chunk_max_chars: int = Field(default=60, ge=10, le=120)
+
+
 class PrivacyConfig(BaseModel):
     """隐私保护：这些前台窗口不去截图/不调模型。"""
 
@@ -157,6 +201,8 @@ class Config(BaseModel):
     diversity: DiversityConfig = Field(default_factory=DiversityConfig)
     meme: MemeConfig = Field(default_factory=MemeConfig)
     control: ControlConfig = Field(default_factory=ControlConfig)
+    activity: ActivityConfig = Field(default_factory=ActivityConfig)
+    memory: MemoryConfig = Field(default_factory=MemoryConfig)
     privacy: PrivacyConfig = Field(default_factory=PrivacyConfig)
 
     def next_interval_sec(self, rng) -> float:

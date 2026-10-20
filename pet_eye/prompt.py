@@ -25,7 +25,8 @@ TASK_RULES = """【此刻的任务】
 8. 用户消息里的“禁止词/开头/长度/句式/具体细节”是硬约束，所有候选都要遵守。
 9. 同一首歌、同一个游戏不要连续提；状态只是参考，拿不准是否在播放时，说“在听/歌单里”，别太绝对。
 10. 如果本轮有“哼歌词”策略：用「」引用 1~2 句正在听的歌的真实歌词（总共不超过 20 字），再加半句自己的话；优先真实歌词，只有完全记不清时才用「啦啦啦」代替，不要编造。
-11. 以 JSON 输出：{"candidates":[{"strategy":"策略id","line":"这句话"}, ...]}，不要输出 JSON 以外的任何字符。
+11. 以 JSON 输出：{"candidates":[{"strategy":"策略id","line":"这句话"}], "remember":[{"tag":"短标签","text":"值得记住的一件事"}]}，不要输出 JSON 以外的任何字符。
+12. `remember` 是可选的，最多 2 条：只有出现「以后还会用到的事实」才写（在做哪个项目、卡在什么问题上、喜欢什么/讨厌什么、作息习惯）。tag 用 2~6 个字的名词短语，text 一句话讲清，不要写“主人在用电脑”这种废话；没有就输出空数组。
 """
 
 
@@ -54,6 +55,9 @@ def build_user_text(
     scene_block: str,
     recent_lines: list[str] | None,
     plan: TurnPlan,
+    activity_block: str = "",
+    memory_block: str = "",
+    window_block: str = "",
 ) -> str:
     now = datetime.now().astimezone()
     weekday = "一二三四五六日"[now.weekday()]
@@ -108,6 +112,9 @@ def build_user_text(
         f"主人当前前台窗口：{title}\n"
         f"{_session_block(plan, idle_min)}"
         f"{scene_text}"
+        f"{window_block}"
+        f"{activity_block}"
+        f"{memory_block}"
         f"{recent_block}"
         f"{material_block}"
         f"{callback_block}"
@@ -120,5 +127,5 @@ def build_user_text(
         "请按 system 的要求，只输出 JSON：\n"
         '{"candidates":['
         + ",".join(f'{{"strategy":"{sid}","line":"..."}}' for sid in ids.split("、"))
-        + "]}"
+        + '],"remember":[{"tag":"标签","text":"值得记住的事"}]}'
     )

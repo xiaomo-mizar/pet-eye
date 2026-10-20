@@ -104,6 +104,33 @@ packs = []
 enabled = true
 port = 8765
 
+[activity]
+# 用户动向：注册表（Win+R、地址栏、最近应用、Recent 文件）+ PowerShell（带窗口的进程）
+# 只读元数据，不碰文件内容；密码/银行这类关键词会被过滤掉
+enabled = true
+registry = true
+powershell = true
+# PowerShell 比较慢，单独缓存，默认 5 分钟采一次
+ps_interval_min = 5
+max_items = 6
+recent_minutes = 240
+
+[memory]
+# 3 轮滑动窗口 + 标签/chunk 长期记忆；每 24 小时遗忘一次
+enabled = true
+window_size = 3
+max_tags = 40
+max_chunks_per_tag = 8
+forget_interval_hours = 24
+# 没被用到的记忆每天权重乘这个数，低于 min_weight 就删
+decay_per_day = 0.6
+min_weight = 0.15
+forget_after_days = 7
+# 相似标签用向量合并（0.86 以上算同一类）
+merge_similarity = 0.86
+recall_k = 3
+remember_per_turn = 2
+
 [privacy]
 # 前台窗口标题命中这些关键词时，这一轮直接跳过（不截图、不调模型）
 skip_window_keywords = [

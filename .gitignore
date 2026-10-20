@@ -19,3 +19,5 @@ docs/*-doc.png
 dist/
 build/
 *.spec
+
+pytest-of-*/
