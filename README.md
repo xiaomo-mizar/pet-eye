@@ -17,6 +17,7 @@
 | **Python 3.11+** | 代码里用了 `tomllib`、`X \| None` 等新语法 |
 | **DeepSeek API Key** | 走 OpenAI 兼容接口，模型 `deepseek-flash`（原生支持图片输入） |
 | **dsh-pet 0.3.x** | 提供桌宠窗口和贴靠锚点。**没有它气泡没有落点，什么都不会显示** |
+| `dsh-meme`（可选） | 提供表情包图库。没有它只是不发图，其它功能照常 |
 
 最后一条是硬依赖：本项目只管「说」，不管「站」。桌宠在左半屏它就把气泡放右上角，在右半屏就放左上角。
 
@@ -117,7 +118,7 @@ port = 8765                  # 桌宠右键菜单通过 127.0.0.1:8765 控制
 
 **让它别复读**（`pet_eye/diversity.py`）：13 种策略轮盘（观察、陪伴、吐槽、提问、冷知识、夸夸、小故事、傲娇、吃醋、猜心思、哼歌词、提醒休息、追问上一句），一次生成 3 条候选，按「新颖度 + 屏幕锚点 + 长度档 + 句式 + 禁用词」打分选一条；最近 12 句进记忆，高频开头和词会被动态禁用。听歌时可以哼一两句歌词。
 
-**表情包**（`pet_eye/meme.py`）：读本地 `~/.dsh/meme-packs/*/index.db`（dsh-meme 的图库格式），按当前情绪和屏幕情景挑 12 张候选交给模型，模型选一张并写配文，图和字一起贴在气泡里。
+**表情包**（`pet_eye/meme.py`）：只读扫描 [`dsh-meme`](https://github.com/yyh-001/dsh-meme) 插件的图库 `~/.dsh/meme-packs/*/index.db`，按当前情绪和屏幕情景挑 12 张候选交给模型，模型选一张并写配文，图和字一起贴在气泡里。
 
 ---
 
@@ -129,16 +130,27 @@ port = 8765                  # 桌宠右键菜单通过 127.0.0.1:8765 控制
 
 ---
 
-## 自己的表情包
+## 表情包（可选，依赖另一个插件）
 
-图库格式跟 dsh-meme 一致：`~/.dsh/meme-packs/<包名>/` 下放图片，再配一个 `index.db`（SQLite）：
+**本项目不自带任何表情包图片。** 表情包图库由 DSH 的另一个插件 [`dsh-meme`](https://github.com/yyh-001/dsh-meme) 提供：它负责收录/学习图片、打标签、生成索引，图都放在 `~/.dsh/meme-packs/<包名>/` 里。
+
+`pet_eye/meme.py` 只做一件事：**只读**扫描这些图库的 `index.db`，按当前情绪和屏幕情景挑 12 张候选，交给模型选一张并写配文。
+
+所以：
+
+- 装了 `dsh-meme` 并且里面已经有图 → 每 5 条文字回复自动插一张；
+- 没装、或者图库是空的 → 自动跳过，不影响文字回复，日志里只有一行 warning；
+- 只想发文字 → `[meme] enabled = false`。
+
+图库格式（想自己造一个包的话）：
 
 ```sql
+-- ~/.dsh/meme-packs/<包名>/index.db
 CREATE TABLE memes (path TEXT, tag TEXT, caption TEXT, keywords TEXT);
 -- path 是相对包目录的文件名，tag 用 happy / angry / sad / shy / confused / daily
 ```
 
-没有图库不影响主流程，`[meme] enabled = false` 关掉即可。
+表情包图片的版权归各自作者，本仓库不转存、不打包。
 
 ---
 
