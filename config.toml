@@ -28,6 +28,10 @@ save_debug_shot = false
 change_threshold = 4
 # true = 画面没变化就不调用模型（省钱）；false = 每次到点都看一眼
 skip_if_unchanged = false
+# 门控：当前画面和上一张发给模型的画面相似度 > gate_similarity 就整轮跳过
+# （不采动向、不调模型、不写记忆）；进程内存里始终只留这两张缩略图
+gate = true
+gate_similarity = 0.95
 
 [bubble]
 # 气泡至少停留 6 秒；开启 auto_duration 后会按字数延长到最多 14 秒

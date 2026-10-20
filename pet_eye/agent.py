@@ -14,7 +14,7 @@ from typing import Any
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
 
 from .activity import Activity, collect as collect_activity
-from .capture import ScreenCapture, Shot, hamming
+from .capture import FrameGate, ScreenCapture, Shot, hamming
 from .config import Config
 from .context import get_scene
 from .diversity import STRATEGY_BY_ID, TurnPlan, plan_turn, screen_digest, stats_summary
@@ -80,6 +80,7 @@ class CycleResult:
     remember: list[tuple[str, str]] = field(default_factory=list)
     activity_digest: str = ""
     scene_text: str = ""
+    similarity: float = 0.0
 
 
 class WorkerSignals(QObject):
@@ -95,6 +96,7 @@ class CycleWorker(QRunnable):
         session: Session,
         memes: MemeLibrary,
         memory: MemoryStore,
+        gate: FrameGate,
     ):
         super().__init__()
         self.cfg = cfg
@@ -103,6 +105,7 @@ class CycleWorker(QRunnable):
         self.session = session
         self.memes = memes
         self.memory = memory
+        self.gate = gate
         self.signals = WorkerSignals()
 
     def run(self) -> None:
@@ -111,6 +114,16 @@ class CycleWorker(QRunnable):
             pet, _win = get_pet_rect()
             shot: Shot = self.capture.grab([pet] if pet else [])
             result.shot_hash = shot.hash
+
+            # ---- 门控：上一张发出去的图 vs 现在这张 ----
+            # 相似度超过阈值就整轮不跑：不采动向、不调模型、不写记忆，一分钱不花。
+            score = self.gate.check(shot)
+            result.similarity = score
+            if self.gate.should_skip(score):
+                result.skipped = f"画面和上次几乎一样（相似度 {score:.3f}），这轮不花钱"
+                result.changed = False
+                self.signals.done.emit(result)
+                return
             threshold = self.cfg.capture.change_threshold
             if (
                 self.cfg.capture.skip_if_unchanged
@@ -213,6 +226,9 @@ class CycleWorker(QRunnable):
             result.bucket = plan.bucket
             result.material_id = plan.material_id
 
+            # 这轮确定要花钱调模型了：把当前画面记为新的基准图（内存里始终只有两张）
+            self.gate.commit(shot)
+
             if (
                 self.cfg.meme.enabled
                 and self.session.since_meme >= max(1, self.cfg.meme.every - 1)
@@ -306,6 +322,7 @@ class PetEyeAgent(QObject):
         self.cfg = cfg
         self._config_path = config_path
         self.capture = ScreenCapture(cfg.capture)
+        self.gate = FrameGate(cfg.capture)
         self.llm = VisionLLM(cfg.llm, api_key)
         self.memes = MemeLibrary(cfg.meme.packs)
         self.memory = MemoryStore(cfg.memory, MEMORY_PATH).load()
@@ -493,6 +510,12 @@ class PetEyeAgent(QObject):
             "max_interval_min": self.cfg.agent.max_interval_min,
             "next_in_sec": max(0.0, self._next_at - time.time()) if self._next_at else None,
             "memory": self.memory.stats() if self.cfg.memory.enabled else {},
+            "gate": {
+                "enabled": self.gate.enabled,
+                "threshold": self.gate.threshold,
+                "last_similarity": round(self.gate.last_similarity, 4),
+                "has_baseline": self.gate.has_baseline,
+            },
         }
 
     # ---------- 状态 ----------
@@ -683,7 +706,7 @@ class PetEyeAgent(QObject):
             recent_meme_keys=list(self._recent_meme_keys),
         )
         worker = CycleWorker(
-            self.cfg, self.capture, self.llm, session, self.memes, self.memory
+            self.cfg, self.capture, self.llm, session, self.memes, self.memory, self.gate
         )
         worker.signals.done.connect(self._on_worker_done)
         self._worker = worker

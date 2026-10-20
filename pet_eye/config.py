@@ -39,6 +39,9 @@ class CaptureConfig(BaseModel):
     save_debug_shot: bool = False
     change_threshold: int = Field(default=4, ge=0, le=64)
     skip_if_unchanged: bool = False
+    # 门控：当前画面和「上一张发给模型的画面」相似度 > gate_similarity 就整条链路不跑
+    gate: bool = True
+    gate_similarity: float = Field(default=0.95, ge=0.5, le=1.0)
 
 
 class BubbleConfig(BaseModel):
