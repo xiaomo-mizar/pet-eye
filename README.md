@@ -21,6 +21,31 @@
 
 最后一条是硬依赖：本项目只管「说」，不管「站」。桌宠在左半屏它就把气泡放右上角，在右半屏就放左上角。
 
+### 前置插件在哪下载
+
+| 插件 | 干什么 | 下载地址 |
+| --- | --- | --- |
+| [`dsh-pet`](https://github.com/PC2005-cloud/dsh-pet) **必需** | 桌宠本体；气泡贴着它，并复用它的 `HIT_BOX` 和字体 | GitHub 仓库：https://github.com/PC2005-cloud/dsh-pet<br>npm 包名：`dsh-pet`（实测 0.3.7） |
+| [`dsh-meme`](https://github.com/yyh-001/dsh-meme) 可选 | 表情包图库：收录/学图、打标签、建索引 | GitHub 仓库：https://github.com/yyh-001/dsh-meme<br>文档：https://yyh-001.github.io/dsh-meme/<br>npm 包名：`dsh-meme`（实测 0.1.44） |
+
+两个都是 **DeepSeek Harness 插件**，装在 DSH 里，不是装给 pet-eye 的。三种装法任选：
+
+1. **DSH 里直接装**：插件页/市场搜包名 `dsh-pet`、`dsh-meme`，装完重启桌面模式
+2. **让 DSH 里的 agent 装**：跟它说「用插件管理器装 dsh-pet 和 dsh-meme 这两个 npm 包」
+3. **手动（最确定）**：在 `%USERPROFILE%\.dsh\profiles\desktop` 里
+
+   ```bat
+   npm i dsh-pet dsh-meme
+   ```
+
+   然后把包名加进该目录 `package.json` 的 `dsh.profile.bundles` 数组，重启 DSH：
+
+   ```json
+   { "dsh": { "profile": { "bundles": ["dsh-pet", "dsh-meme"] } } }
+   ```
+
+装完确认：桌面上出现桌宠（窗口标题以 `dsh-pet` 开头），`%USERPROFILE%\.dsh\meme-packs\` 下出现图库目录。
+
 ---
 
 ## 快速开始
@@ -163,6 +188,66 @@ CREATE TABLE memes (path TEXT, tag TEXT, caption TEXT, keywords TEXT);
 ```
 
 表情包图片的版权归各自作者，本仓库不转存、不打包。
+
+---
+
+## 给 AI 助手的安装指引
+
+> 这一节是写给「替用户装这个项目的 AI 助手」的：照做即可，人类用户可以跳过。
+
+### 你的目标
+
+让用户电脑上出现一个**独立的后台进程**：每 60 秒截一次屏 → 调视觉模型 → 在桌宠旁边弹一个气泡。它不是 DSH 插件，不挂进 DSH，装完是个托盘程序。
+
+### 先判断现状（按顺序，别急着重装）
+
+```powershell
+# 1. 桌宠在不在
+Get-Process electron -ErrorAction SilentlyContinue | Format-Table Id,MainWindowTitle
+#    → MainWindowTitle 以 "dsh-pet" 开头 = 在；空 = 没装或没开
+
+# 2. pet-eye 是不是已经在跑
+curl.exe -s -H "X-Pet-Eye-Token: xiaofeiyu-8765" http://127.0.0.1:8765/pet-eye/status
+#    → 返回 {"ok": true, ...} = 已经在跑，不用装了
+
+# 3. API Key 有没有
+echo $env:DEEPSEEK_API_KEY
+Test-Path "$env:USERPROFILE\.dsh\.credentials.yaml"
+```
+
+### 安装步骤
+
+| # | 做什么 | 怎么做 |
+| --- | --- | --- |
+| 1 | 装桌宠插件 `dsh-pet`（必需） | 在 DSH 里装 npm 包 `dsh-pet`，重启桌面模式。**确认桌面上出现桌宠**再继续 |
+| 2 | 装 pet-eye | 下载 https://github.com/xiaomo-mizar/pet-eye/releases/download/v1.0.0/PetEye-v1.0.0-win64.zip ，解压到 `%LOCALAPPDATA%\pet-eye`（**路径不要有中文/空格/Program Files**） |
+| 3 | 写 Key | 在解压目录建 `.env`，内容一行：`DEEPSEEK_API_KEY=sk-...`（用户 DSH 里已配过 DeepSeek 的话可跳过，程序会读 `%USERPROFILE%\.dsh\.credentials.yaml`） |
+| 4 | 启动 | 双击 `小肥鱼识屏.exe`，或 `Start-Process "$env:LOCALAPPDATA\pet-eye\小肥鱼识屏.exe"`。首次运行会自动生成 `config.toml` |
+| 5 | 装表情包（可选） | DSH 里装 `dsh-meme`，让用户导入几张图；`%USERPROFILE%\.dsh\meme-packs\` 下出现带 `index.db` 的目录即可 |
+
+### 验收（四条都要过）
+
+1. 进程在：`Get-Process | Where-Object ProcessName -like '*肥鱼*'`
+2. 端口通：`curl` status 返回 `"ok": true`
+3. 日志有内容：`<安装目录>\runtime\pet-eye.log` 里出现 `菜单控制已启动`
+4. 真出过一句话：status 里 `last_line` 是 20~50 字的中文，且 `last_error` 为空
+
+### 常见失败与处理
+
+| 现象 | 原因 | 处理 |
+| --- | --- | --- |
+| 进程在跑，但屏幕上什么都没有 | 找不到桌宠窗口 → 没有锚点 | 确认 dsh-pet 在跑、窗口标题以 `dsh-pet` 开头；桌宠被最小化也不行 |
+| 双击没反应 / 被拦 | SmartScreen（exe 未签名） | 右键属性解除锁定，或「更多信息 → 仍要运行」 |
+| status 返回 `"message": "稍后重试"`，`last_error` 说候选不合格 | 模型连续给出禁用词/重复句式 | 正常会自愈；持续超过 10 分钟就把 `[diversity] similarity_threshold` 调高或关掉 `enabled` |
+| 401 / 403 | Key 错或没额度 | 检查 `.env` 或环境变量 |
+| `model` 改成 `deepseek-v4-pro` 后不认图 | 那个是纯文本模型 | 改回 `deepseek-flash` |
+| 端口 8765 被占 | 同时开了两份 | 关掉旧的，或改 `[control] port` |
+
+### 不要做的事
+
+- 不要把它当服务/计划任务常驻跑：它是托盘程序，用户右键托盘才能退出。
+- 不要替用户改 `[privacy]` 里的关键词，也不要打开 `save_debug_shot`。
+- 不要在没有桌宠的机器上反复重装 pet-eye——那不是它的问题。
 
 ---
 
