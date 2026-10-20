@@ -1,0 +1,18 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+
+# 运行时产物：日志、状态、单实例锁、调试截图（可能含屏幕内容）
+runtime/
+
+# 密钥：只提交 .env.example
+.env
+
+# 本地开发笔记 / 历史备份 / 个人文档，不进仓库
+notes/
+alternatives/
+docs/*.docx
+docs/*-doc.png

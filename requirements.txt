@@ -1,0 +1,16 @@
+opencv-python-headless==5.0.0.93
+numpy==2.5.4
+mss==10.2.0
+openai==3.35.1
+pydantic==2.14.1
+PySide6-Essentials==6.12.0
+# 读 Windows 媒体会话（歌名/歌手/播放状态）；装不上也能跑，会退回窗口标题
+winrt-runtime==3.2.1
+winrt-Windows.Media.Control==3.2.1
+winrt-Windows.Foundation==3.2.1
+winrt-Windows.Foundation.Collections==3.2.1
+# 读播放器进程是否真的在出声（避免把暂停/上次没关的歌当成正在听）
+pycaw==20260927
+comtypes==1.4.17
+psutil==7.2.2
+pytest==9.1.1

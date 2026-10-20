@@ -1,0 +1,120 @@
+# 小肥鱼识屏 · 配置
+# 只写想改的项即可，其余用内置默认值。改完重启程序生效。
+
+[llm]
+# DeepSeek 官方 OpenAI 兼容接口；V4.1-Flash 的模型 id 是 deepseek-flash
+base_url = "https://api.deepseek.com"
+model = "deepseek-flash"
+api_key_env = "DEEPSEEK_API_KEY"
+# V4.1-Flash 是推理模型：low 足够看懂屏幕，且不会把输出预算吃光
+reasoning_effort = "low"
+max_tokens = 2000
+temperature = 0.9
+timeout_sec = 90
+connect_retries = 2
+line_retries = 2
+json_mode = true
+
+[capture]
+# primary = 主屏；all = 所有屏拼成的虚拟桌面
+monitor = "primary"
+max_width = 1280
+jpeg_quality = 80
+# 把桌宠所在区域糊掉，避免模型对着屏幕角落的小人说话
+mask_pet = true
+mask_blur = 41
+# 调试时改成 true，会把最近一张截图写到 runtime/last-shot.jpg（含屏幕内容，注意隐私）
+save_debug_shot = false
+change_threshold = 4
+# true = 画面没变化就不调用模型（省钱）；false = 每次到点都看一眼
+skip_if_unchanged = false
+
+[bubble]
+# 气泡至少停留 6 秒；开启 auto_duration 后会按字数延长到最多 14 秒
+duration_sec = 6
+auto_duration = true
+# true = 蓝色描边 + 外发光 + 弹入动画；false = 原来的素白气泡
+vivid = true
+accent_color = "#5b9cff"
+fill_color = "#e9f3ff"
+text_color = "#22314d"
+max_width_px = 340
+font_size_px = 18
+padding_x_px = 20
+padding_y_px = 16
+gap_px = 12
+screen_margin_px = 18
+# 拖拽时跟随桌宠的刷新间隔（33ms ≈ 30fps；越小越跟手）
+follow_interval_ms = 33
+max_chars_per_line = 18
+# auto = 桌宠在左半屏就放它右上角，在右半屏就放左上角
+side = "auto"
+opacity = 0.97
+fade_ms = 180
+
+[agent]
+# 当前：每 60 秒看一次（1.0 分钟）
+min_interval_min = 1.0
+max_interval_min = 1.0
+# 启动后等多久第一次看屏幕
+first_delay_sec = 10
+# true = 主人离开超过 idle_threshold_min 分钟就先不打扰
+pause_when_idle = false
+idle_threshold_min = 12
+# 失败后多久重试
+retry_on_error_sec = 300
+# 最近几句话带进提示词，避免重复
+remember_last_lines = 12
+# 60 秒一次，托盘通知会太吵；只保留气泡
+tray_notifications = false
+
+[context]
+# 识别当前在听什么歌、玩什么游戏、做什么工作；会作为参考写进提示词
+enabled = true
+# 读系统媒体会话 / 播放器窗口标题（歌名、歌手、播放状态）
+media = true
+# 识别游戏（已知游戏进程 + 全屏应用）
+games = true
+
+[diversity]
+# 降低同质化：候选策略、禁用词、去重、素材、屏幕变化
+enabled = true
+# 每轮生成几个不同策略的候选，按新颖度/具体性打分选一条
+candidates = 3
+# 和最近句子相似度超过这个值就扣分
+similarity_threshold = 0.55
+# 听歌时允许“哼 1~2 句歌词”的候选
+music_lyrics = true
+# 把屏幕变化区域写进提示词
+screen_digest = true
+# 冷知识/小故事/提问素材库
+material_bank = true
+# 上一轮问过的问题，下一轮可以追问
+callback = true
+
+[meme]
+# 每 5 条文字回复，插一张符合情景的表情包
+enabled = true
+every = 5
+# 留空 = 扫描 ~/.dsh/meme-packs 下全部图库；也可以只写想用的包名
+packs = []
+
+[control]
+# 桌宠右键菜单通过这个本地端口控制小肥鱼（只监听 127.0.0.1）
+enabled = true
+port = 8765
+
+[privacy]
+# 前台窗口标题命中这些关键词时，这一轮直接跳过（不截图、不调模型）
+skip_window_keywords = [
+  "1Password",
+  "Bitwarden",
+  "KeePass",
+  "LastPass",
+  "密码",
+  "银行",
+  "支付",
+  "支付宝",
+  "微信支付",
+]
+skip_when_locked = true
