@@ -171,6 +171,9 @@ _COMMON_PET_WORDS = (
     "🌙",
 )
 
+# 这几个单字语气词太常用，硬禁会把整批候选打回
+_SOFT_PARTICLES = frozenset({"哦", "呀", "嘛"})
+
 # --------------------------------------------------------------------------
 # 素材库
 # --------------------------------------------------------------------------
@@ -269,14 +272,12 @@ def banned_words(recent_lines: list[str]) -> list[str]:
     window = [x for x in recent_lines if x][-6:]
     banned: list[str] = []
     for word in _COMMON_PET_WORDS:
+        # 单字语气词一禁就误伤一大片（“哦/呀/嘛”），只在提示词里劝，不硬禁
+        if word in _SOFT_PARTICLES:
+            continue
         hits = sum(1 for line in window if word in line)
         if hits >= 2:
             banned.append(word)
-    # 结尾语气词也查一下
-    for tail in ("哦", "呀", "嘛"):
-        if sum(1 for line in window[-3:] if line.rstrip("。！？!? ").endswith(tail)) >= 2:
-            if tail not in banned:
-                banned.append(tail)
     return banned[:6]
 
 

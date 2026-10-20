@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from dataclasses import dataclass, field
@@ -318,6 +319,13 @@ class VisionLLM:
             if candidates:
                 recent = list(recent_lines or [])
                 acceptable = [row for row in candidates if candidate_ok(row["line"], plan)]
+                if not acceptable and attempt >= self.cfg.line_retries:
+                    # 重试到最后一次还是全被硬约束打回：宁可说一句，也别整轮哑掉
+                    acceptable = candidates
+                    last_error = "最后一次仍不满足硬约束，退化为最不像复读的一句"
+                    logging.getLogger("pet_eye").warning(
+                        "候选全部违反硬约束，最后一轮放宽：%s", "; ".join(r["line"] for r in candidates[:3])
+                    )
                 if not acceptable:
                     last_error = "候选都用了禁用词/禁用开头，或句式不对"
                 else:
