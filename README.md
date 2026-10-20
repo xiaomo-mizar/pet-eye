@@ -14,7 +14,7 @@
 | 需要 | 说明 |
 | --- | --- |
 | **Windows 10 / 11** | 用了 Win32 API（窗口枚举、DPI、媒体会话），只支持 Windows |
-| **Python 3.11+** | 代码里用了 `tomllib`、`X \| None` 等新语法 |
+| **Python 3.11+**（只有源码运行需要） | 用免安装包的话不用管 |
 | **DeepSeek API Key** | 走 OpenAI 兼容接口，模型 `deepseek-flash`（原生支持图片输入） |
 | **dsh-pet 0.3.x** | 提供桌宠窗口和贴靠锚点。**没有它气泡没有落点，什么都不会显示** |
 | `dsh-meme`（可选） | 提供表情包图库。没有它只是不发图，其它功能照常 |
@@ -24,6 +24,18 @@
 ---
 
 ## 快速开始
+
+### 方式一：下载即用（不用装 Python）
+
+去 [Releases](https://github.com/xiaomo-mizar/pet-eye/releases/latest) 下 `PetEye-v1.0.0-win64.zip`（约 102 MB，自带 Python、Qt、OpenCV）：
+
+1. 解压到任意目录（别放 `C:\Program Files`，那样写不了配置）
+2. 同目录新建 `.env`，写一行 `DEEPSEEK_API_KEY=sk-...`
+3. 双击 `小肥鱼识屏.exe`，首次运行会在旁边生成 `config.toml`
+
+还是需要 **dsh-pet 在跑**，否则气泡没有落点。
+
+### 方式二：从源码跑
 
 ```bat
 :: 1. 装依赖

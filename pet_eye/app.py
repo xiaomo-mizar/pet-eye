@@ -32,7 +32,7 @@ from .credentials import load_api_key
 from .diversity import plan_turn
 from .llm import LLMError, VisionLLM
 from .logging_setup import setup_logging
-from .paths import CONFIG_PATH, LOG_PATH, RUNTIME_DIR, ensure_runtime_dir
+from .paths import CONFIG_PATH, LOG_PATH, RUNTIME_DIR, ensure_runtime_dir, ensure_user_config
 from .window import (
     foreground_title,
     get_pet_rect,
@@ -299,6 +299,8 @@ def main(argv: list[str] | None = None) -> int:
     app.setQuitOnLastWindowClosed(False)
 
     logger = setup_logging(getattr(logging, args.log_level))
+    if ensure_user_config():
+        logger.info("首次运行：已在程序目录生成 config.toml")
     try:
         cfg = load_config(args.config)
     except Exception as e:

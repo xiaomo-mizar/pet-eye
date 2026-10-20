@@ -16,3 +16,6 @@ notes/
 alternatives/
 docs/*.docx
 docs/*-doc.png
+dist/
+build/
+*.spec
