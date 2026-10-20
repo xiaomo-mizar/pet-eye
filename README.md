@@ -330,6 +330,15 @@ tests/           66 个单测
 
 ---
 
+## 致谢
+
+- [@Stellfract-Frost](https://github.com/Stellfract-Frost)：这个项目从想法到落地的过程里，给了我很多灵感、反馈和耐心。
+- [`dsh-pet`](https://github.com/PC2005-cloud/dsh-pet)：桌宠本体，气泡贴着它才有落点。
+- [`dsh-meme`](https://github.com/yyh-001/dsh-meme)：表情包图库。
+- [DeepSeek](https://www.deepseek.com/)：视觉模型接口。
+
+---
+
 ## License
 
 MIT
