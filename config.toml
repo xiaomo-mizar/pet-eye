@@ -138,7 +138,8 @@ forget_interval_hours = 24
 # 没被用到的记忆每天权重乘这个数，低于 min_weight 就删
 decay_per_day = 0.6
 min_weight = 0.15
-forget_after_days = 7
+# 硬上限：多久没被用到就直接删（30 天；衰减本身通常更早把它削掉）
+forget_after_days = 30
 # 相似标签用向量合并（0.86 以上算同一类）
 merge_similarity = 0.86
 recall_k = 3

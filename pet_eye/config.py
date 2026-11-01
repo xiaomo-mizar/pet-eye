@@ -182,7 +182,7 @@ class MemoryConfig(BaseModel):
     decay_per_day: float = Field(default=0.6, ge=0.1, le=0.99)
     min_weight: float = Field(default=0.15, ge=0.01, le=1.0)
     # 遗忘后仍然多久没被用到的标签直接删
-    forget_after_days: float = Field(default=7.0, ge=1.0, le=90.0)
+    forget_after_days: float = Field(default=30.0, ge=1.0, le=90.0)
     # 同类标签用向量相似度合并
     merge_similarity: float = Field(default=0.86, ge=0.5, le=0.99)
     # 每轮召回几条记忆塞进提示词
