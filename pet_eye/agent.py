@@ -14,6 +14,7 @@ from typing import Any
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
 
 from .activity import Activity, collect as collect_activity
+from .broadcast import post_line as broadcast_line
 from .capture import FrameGate, ScreenCapture, Shot, hamming
 from .config import Config
 from .context import get_scene
@@ -592,6 +593,37 @@ class PetEyeAgent(QObject):
     def _emit_status(self) -> None:
         self.status_changed.emit(self.status())
 
+    # ---------- 输出 ----------
+
+    def _broadcast(self, line: str, image: str | None = None) -> None:
+        """把这句话交给 dsh-pet 自带的聊天气泡。"""
+        if self.cfg.output.mode not in ("broadcast", "both"):
+            return
+        if not line:
+            return
+        try:
+            ok = broadcast_line(
+                line,
+                origin=self.cfg.output.origin,
+                pet=self.cfg.output.pet,
+                image=image,
+                timeout=self.cfg.output.timeout_sec,
+            )
+            if not ok and image:
+                # 配图不在桌宠自己的表情池里会被拒（unknown-image），退成纯文字
+                ok = broadcast_line(
+                    line,
+                    origin=self.cfg.output.origin,
+                    pet=self.cfg.output.pet,
+                    timeout=self.cfg.output.timeout_sec,
+                )
+            if ok:
+                log.info("已送进桌宠聊天框")
+            else:
+                log.warning("这句没送进桌宠聊天框：%s", line)
+        except Exception as e:
+            log.debug("送桌宠聊天框异常：%s", e)
+
     # ---------- 记忆 ----------
 
     def _remember_turn(self, scene: str, line: str, activity_digest: str, notes) -> None:
@@ -792,6 +824,7 @@ class PetEyeAgent(QObject):
                 result.usage.get("total_tokens", "?"),
             )
             self.image_ready.emit(result.meme_path, line)
+            self._broadcast(line, image=result.meme_path)
             self._remember_turn(result.scene_text or result.title, line, result.activity_digest, [])
             self._maybe_forget()
             self._emit_status()
@@ -887,6 +920,7 @@ class PetEyeAgent(QObject):
             result.scene_text or result.title, result.line, result.activity_digest, result.remember
         )
         self._maybe_forget()
+        self._broadcast(result.line)
         self.line_ready.emit(result.line)
         self._emit_status()
         self._schedule_next()

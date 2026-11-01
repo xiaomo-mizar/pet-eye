@@ -108,6 +108,15 @@ packs = []
 enabled = true
 port = 8765
 
+[output]
+# broadcast = 交给 dsh-pet 自带的聊天气泡（和桌宠合并成一个聊天框）
+# bubble    = 自己画 Qt 气泡；both = 两边都发
+mode = "broadcast"
+# broadcast 路由挂在 DSH 的 web 服务上
+origin = "http://127.0.0.1:19387"
+# 多只桌宠时指定哪一只；留空 = 让 dsh-pet 自己选当前活跃的
+pet = ""
+
 [activity]
 # 用户动向：注册表（Win+R、地址栏、最近应用、Recent 文件）+ PowerShell（带窗口的进程）
 # 只读元数据，不碰文件内容；密码/银行这类关键词会被过滤掉

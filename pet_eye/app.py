@@ -287,6 +287,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--show-panel", action="store_true", help="启动时显示控制面板")
     ap.add_argument("--no-tray", action="store_true", help="不创建系统托盘")
     ap.add_argument("--allow-multi", action="store_true", help="允许同时运行多个实例")
+    ap.add_argument("--silent", action="store_true", help="静默启动（开机自启用，不弹任何对话框）")
     ap.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     return ap
 
@@ -318,14 +319,15 @@ def main(argv: list[str] | None = None) -> int:
         api_key = load_api_key(cfg.llm.api_key_env)
     except Exception as e:
         logger.error("API Key 缺失：%s", e)
-        QMessageBox.critical(
-            None,
-            "小肥鱼识屏",
-            "没有找到 DeepSeek API Key。\n\n"
-            "请设置环境变量 DEEPSEEK_API_KEY，或在项目根目录写 .env：\n"
-            "DEEPSEEK_API_KEY=sk-...\n\n"
-            f"详情：{e}",
-        )
+        if not args.silent:
+            QMessageBox.critical(
+                None,
+                "小肥鱼识屏",
+                "没有找到 DeepSeek API Key。\n\n"
+                "请设置环境变量 DEEPSEEK_API_KEY，或在项目根目录写 .env：\n"
+                "DEEPSEEK_API_KEY=sk-...\n\n"
+                f"详情：{e}",
+            )
         return 2
 
     ensure_runtime_dir()
@@ -333,7 +335,10 @@ def main(argv: list[str] | None = None) -> int:
     if not args.allow_multi:
         lock = QLockFile(str(RUNTIME_DIR / "pet-eye.lock"))
         if not lock.tryLock(100):
-            QMessageBox.information(None, "小肥鱼识屏", "小肥鱼已经在陪主人了，看看系统托盘～")
+            if args.silent:
+                logger.info("已经有一只小肥鱼在跑了，静默退出")
+            else:
+                QMessageBox.information(None, "小肥鱼识屏", "小肥鱼已经在陪主人了，看看系统托盘～")
             return 0
         app._pet_eye_lock = lock  # type: ignore[attr-defined]
 
@@ -455,8 +460,12 @@ def main(argv: list[str] | None = None) -> int:
         agent.status_changed.connect(panel.update_status)
         panel.show()
 
-    agent.line_ready.connect(bubble.show_text)
-    agent.image_ready.connect(bubble.show_image_with_text)
+    # broadcast 模式：话交给 dsh-pet 自己的聊天气泡，本地不再画气泡
+    if cfg.output.mode in ("bubble", "both"):
+        agent.line_ready.connect(bubble.show_text)
+        agent.image_ready.connect(bubble.show_image_with_text)
+    else:
+        bubble.hide()
     app.aboutToQuit.connect(agent.stop)
     if lock is not None:
         app.aboutToQuit.connect(lock.unlock)

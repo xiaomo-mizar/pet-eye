@@ -132,6 +132,22 @@ class ControlConfig(BaseModel):
     port: int = Field(default=8765, ge=1024, le=65535)
 
 
+class OutputConfig(BaseModel):
+    """台词往哪儿说。
+
+    - broadcast：交给 dsh-pet 自带的聊天气泡（合并成一个聊天框，推荐）
+    - bubble：自己画 Qt 气泡（老样子）
+    - both：两边都发
+    """
+
+    mode: Literal["broadcast", "bubble", "both"] = "broadcast"
+    # dsh-pet 的 broadcast 路由挂在 DSH 的 web 服务上
+    origin: str = "http://127.0.0.1:19387"
+    # 多只桌宠时指定哪一只；留空 = 让 dsh-pet 自己选当前活跃的
+    pet: str = ""
+    timeout_sec: float = Field(default=5.0, ge=1.0, le=30.0)
+
+
 class ActivityConfig(BaseModel):
     """用户动向：注册表 + PowerShell 看主人在忙什么（只读，不碰文件内容）。"""
 
@@ -204,6 +220,7 @@ class Config(BaseModel):
     diversity: DiversityConfig = Field(default_factory=DiversityConfig)
     meme: MemeConfig = Field(default_factory=MemeConfig)
     control: ControlConfig = Field(default_factory=ControlConfig)
+    output: OutputConfig = Field(default_factory=OutputConfig)
     activity: ActivityConfig = Field(default_factory=ActivityConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     privacy: PrivacyConfig = Field(default_factory=PrivacyConfig)

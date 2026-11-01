@@ -137,6 +137,11 @@ packs = []                   # 留空 = 用 ~/.dsh/meme-packs 下全部图库
 [control]
 port = 8765                  # 桌宠右键菜单通过 127.0.0.1:8765 控制
 
+[output]
+mode = "broadcast"           # 交给 dsh-pet 自带聊天气泡；bubble = 自己画；both = 两边都发
+origin = "http://127.0.0.1:19387"
+pet = ""                     # 多只桌宠时指定 id，留空 = 当前活跃的那只
+
 [activity]
 enabled = true               # 读注册表 + PowerShell 了解你在忙什么
 ps_interval_min = 5          # 进程快照缓存 5 分钟，别每轮都开 PowerShell
@@ -275,6 +280,30 @@ Test-Path "$env:USERPROFILE\.dsh\.credentials.yaml"
 
 ---
 
+## 和桌宠合并成一个聊天框
+
+默认 `[output] mode = "broadcast"`：小肥鱼识屏**不再自己画气泡**，而是把这句话 POST 给
+dsh-pet 的 `POST /dsh-pet-7340/broadcast`，由桌宠用它原生的聊天气泡说出来——屏幕上只有一个聊天框。
+
+- 想换回自己画的 Qt 气泡：`mode = "bubble"`；两边都想要：`mode = "both"`
+- 这个路由挂在 DSH 的 web 服务上（默认 `127.0.0.1:19387`），不是桌宠 Electron 的端口
+- 配图如果不在桌宠自己的表情池里会被拒（`unknown-image`），代码会自动退成纯文字重发
+- DSH 没起来时这条会失败并记一条 warning，下一轮照常重试，不影响识屏本身
+
+## 开机自启
+
+把下面这个快捷方式放进 `shell:startup`（Win+R 输入 `shell:startup`）：
+
+| 目标 | `...\pet-eye\.venv\Scripts\pythonw.exe` |
+| --- | --- |
+| 参数 | `-m pet_eye --config config.toml --silent` |
+| 起始位置 | `...\pet-eye` |
+
+`--silent` 的意思是**不弹任何对话框**：已经在跑就直接退出，缺 Key 也只写日志。
+想让它晚一点起（等 DSH 和桌宠先就位），可以在快捷方式外面套一层 `timeout` 或者干脆让它先跑——广播失败会自动重试。
+
+---
+
 ## 隐私与费用
 
 - 截图里**包含屏幕内容**，会发给你配置的模型服务商（默认 DeepSeek）。介意就别装。
@@ -308,7 +337,7 @@ Test-Path "$env:USERPROFILE\.dsh\.credentials.yaml"
 
 ```bat
 .venv\Scripts\pip install -r requirements.txt
-.venv\Scripts\python -m pytest -q     # 74 个测试：几何、提示词解析、状态识别、气泡、多样性、表情包、动向、记忆、模型输出
+.venv\Scripts\python -m pytest -q     # 79 个测试：几何、提示词解析、状态识别、气泡、多样性、表情包、动向、记忆、模型输出
 ```
 
 目录：
@@ -330,7 +359,7 @@ pet_eye/
   window.py      Win32 窗口 / DPI / 空闲 / 媒体会话
   control.py     127.0.0.1:8765 控制接口
 scripts/         check_vision.py、diagnose_window.py 等排查脚本
-tests/           74 个单测
+tests/           79 个单测
 ```
 
 ---
